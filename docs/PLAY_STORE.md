@@ -45,6 +45,7 @@ ratio and wants 24-bit images with no alpha channel.
 - Category: Education. Tags: flashcards, study, languages.
 - Privacy policy: the GitHub Pages URL above.
 - Ads: No.
+- Advertising ID: No.
 - In-app purchases: No.
 - App access: no login and no paywall. The app needs the free AnkiDroid app, so give reviewers
   instructions: install AnkiDroid, complete its first-run setup, import the demo deck from
@@ -58,6 +59,10 @@ ratio and wants 24-bit images with no alpha channel.
 - Content rating: Utility, Productivity, Communication or Other. Answer No to violence, sexuality,
   language, controlled substances, gambling, user-generated content, ads and purchases. Expect an
   Everyone or PEGI 3 rating.
+- Foreground service types: Data sync. The phone app's `SyncService` runs only while it reads the
+  due cards from AnkiDroid and pushes them to the watch, posts a progress notification, and stops
+  when the sync finishes. This declaration is required for the `dataSync` type on the App content
+  page.
 - Government app, financial features, health features, news app: No.
 - Data deletion: not applicable, since there are no accounts. Clearing app storage or uninstalling
   removes buffered cards and grades; the privacy policy spells this out.
