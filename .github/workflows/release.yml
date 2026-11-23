@@ -1,0 +1,157 @@
+name: Release
+# Builds signed phone and wear artifacts on a version tag and attaches them to a GitHub Release.
+# Play takes the two .aab files; the .apk files are there for sideloading and testers. The signing
+# key comes from the ANDROID_KEYSTORE_* repository secrets; see docs/RELEASING.md.
+on:
+  push:
+    tags:
+      - 'v*'
+  # Retrying a release whose upload or build failed. Input is the tag, including the v.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag to build, including the v (e.g. v1.1.0)'
+        required: true
+        type: string
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.version || github.ref_name }}
+  # A cancelled run would leave a half-uploaded release behind.
+  cancel-in-progress: false
+permissions: {}
+jobs:
+  release:
+    name: Build signed artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write # to create the release and attach files
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # On workflow_dispatch the default ref is the branch, not the tag being rebuilt.
+          ref: ${{ inputs.version || github.ref }}
+          persist-credentials: false
+      - name: Set up Java JDK 21
+        # No Gradle or Cargo cache: this job publishes signed artifacts, and a cache restored from
+        # another ref is a poisoning surface. publish.yml skips its Gradle cache for the same reason.
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+      - name: Set up Rust Toolchain
+        uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master # zizmor: ignore[ref-version-mismatch]
+        with:
+          toolchain: stable
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - name: Install cargo-ndk
+        run: command -v cargo-ndk >/dev/null || cargo install cargo-ndk --locked
+      - name: Resolve the version
+        id: version
+        env:
+          # Through the environment, not interpolated into run:, since the dispatch input is user text.
+          DISPATCH_TAG: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          tag="${DISPATCH_TAG:-$GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.]+)?$ ]]; then
+            echo "::error::'$tag' is not a vX.Y.Z release tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+      - name: Decode the upload key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in KEYSTORE_BASE64 STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::the ANDROID_* signing secrets are not set" >&2
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > wearforankidroid-upload.jks
+          {
+            echo "storeFile=wearforankidroid-upload.jks"
+            echo "storePassword=$STORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > keystore.properties
+      - name: Run Kotlin Unit Tests
+        run: ./gradlew :phone:testDebugUnitTest :wear:testDebugUnitTest --no-daemon
+      - name: Build signed bundles and APKs
+        run: >-
+          ./gradlew :phone:bundleRelease :wear:bundleRelease :phone:assembleRelease :wear:assembleRelease --no-daemon
+      - name: Check the artifacts
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          aapt2="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt2 | sort -V | tail -1)"
+          apksigner="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner | sort -V | tail -1)"
+          phone_apk=phone/build/outputs/apk/release/phone-release.apk
+          wear_apk=wear/build/outputs/apk/release/wear-release.apk
+
+          read -r phone_code phone_name <<<"$(
+            "$aapt2" dump badging "$phone_apk" |
+              sed -n "s/^package: name='[^']*' versionCode='\([0-9]*\)' versionName='\([^']*\)'.*/\1 \2/p"
+          )"
+          read -r wear_code wear_name <<<"$(
+            "$aapt2" dump badging "$wear_apk" |
+              sed -n "s/^package: name='[^']*' versionCode='\([0-9]*\)' versionName='\([^']*\)'.*/\1 \2/p"
+          )"
+          if [[ "$phone_name" != "$VERSION" || "$wear_name" != "$VERSION" ]]; then
+            echo "::error::versionName ($phone_name, $wear_name) does not match the tag ($VERSION)" >&2
+            exit 1
+          fi
+          if [[ $((phone_code % 10)) -ne 0 || "$wear_code" -ne $((phone_code + 1)) ]]; then
+            echo "::error::versionCode scheme broken: phone $phone_code, wear $wear_code" >&2
+            exit 1
+          fi
+
+          norm() { tr -d ':' | tr '[:lower:]' '[:upper:]'; }
+          phone_cert="$(keytool -printcert -jarfile phone/build/outputs/bundle/release/phone-release.aab |
+            sed -n 's/.*SHA256: //p' | norm)"
+          wear_cert="$(keytool -printcert -jarfile wear/build/outputs/bundle/release/wear-release.aab |
+            sed -n 's/.*SHA256: //p' | norm)"
+          phone_apk_cert="$("$apksigner" verify --print-certs "$phone_apk" |
+            sed -n 's/.*certificate SHA-256 digest: //p' | head -1 | norm)"
+          wear_apk_cert="$("$apksigner" verify --print-certs "$wear_apk" |
+            sed -n 's/.*certificate SHA-256 digest: //p' | head -1 | norm)"
+          if [[ -z "$phone_cert" || "$phone_cert" != "$wear_cert" ||
+                "$phone_cert" != "$phone_apk_cert" || "$phone_cert" != "$wear_apk_cert" ]]; then
+            echo "::error::the phone and wear artifacts are not signed by the same key" >&2
+            printf 'phone aab: %s\nwear aab: %s\nphone apk: %s\nwear apk: %s\n' \
+              "$phone_cert" "$wear_cert" "$phone_apk_cert" "$wear_apk_cert" >&2
+            exit 1
+          fi
+          echo "Signed with SHA-256 $phone_cert"
+      - name: Stage the release files
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp phone/build/outputs/bundle/release/phone-release.aab "dist/Wear-for-AnkiDroid-$TAG-phone.aab"
+          cp wear/build/outputs/bundle/release/wear-release.aab "dist/Wear-for-AnkiDroid-$TAG-wear.aab"
+          cp phone/build/outputs/apk/release/phone-release.apk "dist/Wear-for-AnkiDroid-$TAG-phone.apk"
+          cp wear/build/outputs/apk/release/wear-release.apk "dist/Wear-for-AnkiDroid-$TAG-wear.apk"
+          cp phone/build/outputs/mapping/release/mapping.txt "dist/Wear-for-AnkiDroid-$TAG-phone-mapping.txt"
+          cp wear/build/outputs/mapping/release/mapping.txt "dist/Wear-for-AnkiDroid-$TAG-wear-mapping.txt"
+          ls -l dist
+      - name: Create or update the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --title "$TAG" --generate-notes
+          fi

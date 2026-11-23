@@ -74,9 +74,20 @@ still builds unsigned APKs as an R8 check.
    Play App Signing. Registering the application id and fingerprint does not require a public
    listing.
 
-There is no GitHub release workflow for the apps yet. One would decode the keystore from repository
-secrets, run the two bundle tasks, verify the certificates match, and attach the bundles plus the R8
-`mapping.txt` files to a GitHub Release.
+`.github/workflows/release.yml` runs on a `v*` tag. It builds both bundles and both release APKs,
+checks that the tag matches both `versionName`s and that the version codes follow the
+`release * 10 + form factor` scheme, verifies all four artifacts carry the same certificate, and
+attaches them plus the R8 `mapping.txt` files to a GitHub Release. It does not upload to Play; that
+stays a manual step.
+
+The workflow reads the upload key from repository secrets:
+
+- `ANDROID_KEYSTORE_BASE64`, the base64 of the `.jks`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+Set or rotate them with `gh secret set NAME < file`, which keeps the values out of shell history.
 
 
 ## Version numbers
