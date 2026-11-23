@@ -99,8 +99,9 @@ jobs:
       - name: Run Android Lint (phone + wear)
         run: ./gradlew :phone:lintDebug :wear:lintDebug --no-daemon
       - name: Build Release (unsigned, exercises R8/minify)
-        # Neither module has a signingConfig on release, so this produces an unsigned APK - the
-        # point is exercising R8 with the JNA/UniFFI keep rules, not producing a distributable build.
+        # CI has no upload key, so the release signing config is skipped and this produces unsigned
+        # APKs - the point is exercising R8 with the JNA/UniFFI keep rules, not a distributable
+        # build.
         run: ./gradlew :phone:assembleRelease :wear:assembleRelease --no-daemon
       - name: Check 16 KB Page-Size Alignment
         # Android 15+ (Wear OS 6) devices reject .so files with 4 KB-aligned LOAD segments.

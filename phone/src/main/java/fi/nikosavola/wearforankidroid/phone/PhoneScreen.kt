@@ -149,8 +149,8 @@ private fun CompactLayout(vm: PhoneViewModel, actions: PhoneActions) {
     containerColor = MaterialTheme.colorScheme.background,
     topBar = {
       MediumFlexibleTopAppBar(
-        title = { Text("AnkiDroid") },
-        subtitle = { Text("WearOS Companion") },
+        title = { Text("Wear for AnkiDroid") },
+        subtitle = { Text("Phone companion") },
         navigationIcon = { BrandMark() },
         actions = { OverflowMenu(vm, actions) },
         scrollBehavior = scrollBehavior,
@@ -375,13 +375,13 @@ private fun BrandHeader(vm: PhoneViewModel, actions: PhoneActions, modifier: Mod
     Spacer(Modifier.width(12.dp))
     Column(modifier = Modifier.weight(1f)) {
       Text(
-        text = "ANKIDROID",
+        text = "PHONE COMPANION",
         style = MaterialTheme.typography.labelMedium,
         fontWeight = FontWeight.Bold,
         color = MaterialTheme.colorScheme.primary,
       )
       Text(
-        text = "WearOS Companion",
+        text = "Wear for AnkiDroid",
         style = MaterialTheme.typography.headlineSmall,
         fontWeight = FontWeight.Bold,
         maxLines = 2,

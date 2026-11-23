@@ -106,6 +106,11 @@ verify:
 screenshots serial='emulator-5554':
     scripts/capture-screenshots.sh "{{ serial }}"
 
+# Recapture the phone companion screenshots for the Play listing
+[group('screenshots')]
+phone-screenshots serial='emulator-5554':
+    scripts/capture-phone-screenshots.sh "{{ serial }}"
+
 # List connected adb devices, including wireless ones
 [group('device')]
 devices:

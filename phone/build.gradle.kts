@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   // kotlin.android removed: AGP 9 built-in Kotlin (version pinned in the root buildscript
@@ -27,11 +29,29 @@ android {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
 
+  signingConfigs {
+    // Present only where an upload key has been set up, so a clone with no key (CI, contributors)
+    // still builds and stays unsigned.
+    val keyProperties = rootProject.file("keystore.properties")
+    if (keyProperties.exists()) {
+      create("upload") {
+        val key = Properties()
+        keyProperties.inputStream().use { key.load(it) }
+        storeFile = rootProject.file(requireNotNull(key.getProperty("storeFile")))
+        storePassword = key.getProperty("storePassword")
+        keyAlias = key.getProperty("keyAlias")
+        keyPassword = key.getProperty("keyPassword")
+      }
+    }
+  }
+
   buildTypes {
     release {
       isMinifyEnabled = true
       isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      // Same upload key as the wear module; Play requires one certificate per listing.
+      signingConfigs.findByName("upload")?.let { signingConfig = it }
     }
   }
   compileOptions {

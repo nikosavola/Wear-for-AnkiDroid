@@ -163,9 +163,9 @@ internal fun TransformingLazyColumnScope.aboutSection(
   item {
     Text(
       text =
-        "Anki® is a registered trademark of Ankitects Pty Ltd, AnkiDroid a trademark of the " +
-          "AnkiDroid Open Source Team. Unofficial third-party companion, not affiliated with " +
-          "or endorsed by either.",
+        "Anki and the Anki logo are trademarks of Anki Software, LLC. AnkiDroid is a trademark " +
+          "of the AnkiDroid Open Source Team. Unofficial third-party companion, not affiliated " +
+          "with or endorsed by either.",
       style = MaterialTheme.typography.labelSmall,
       textAlign = TextAlign.Center,
       modifier = Modifier.padding(horizontal = 8.dp).transformedHeight(this, transformSpec),

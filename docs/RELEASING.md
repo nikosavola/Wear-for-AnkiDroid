@@ -26,20 +26,58 @@ takes the artifact version from the tag without the leading `v`.
 
 No `v*` tag has been pushed yet, so the version in the README is still the next one to cut.
 
-## App APKs
+## App bundles
 
-There is no release workflow for the apps yet. CI builds unsigned release APKs to exercise R8, and
-those cannot be installed. To publish installable APKs:
+Both apps ship in one Play listing with two form factors, share the application id, and are signed
+with one upload key. The key is local-only: `wearforankidroid-upload.jks` at the repository root,
+with its passwords in `keystore.properties`. `.gitignore` excludes both. `signingConfigs` in each
+module reads that file when it exists and leaves release builds unsigned otherwise, which is why CI
+still builds unsigned APKs as an R8 check.
 
-1. Generate a release keystore and keep it out of the repository. `.gitignore` already excludes
-   `*.jks`, `*.keystore` and `keystore.properties`.
-2. Add a `signingConfigs.release` block to both app modules. Use the same key for both APKs.
-3. Add a release workflow on `v*` tags that decodes the keystore from repository secrets, builds
-   `:phone:assembleRelease` and `:wear:assembleRelease`, verifies both APKs carry the same
-   certificate, and attaches them plus the R8 `mapping.txt` files to a GitHub Release.
-4. Register `fi.nikosavola.wearforankidroid` and the release key's SHA-256 fingerprint in Play
-   Console's Android developer verification. This is required for installation on certified
-   devices even when the APK is sideloaded, and it does not require a Play Store listing.
+1. Generate the key once, if it does not exist yet:
+
+   ```bash
+   keytool -genkeypair -keystore wearforankidroid-upload.jks -alias wearforankidroid \
+     -keyalg RSA -keysize 4096 -validity 10000
+   ```
+
+2. Write `keystore.properties`:
+
+   ```properties
+   storeFile=wearforankidroid-upload.jks
+   storePassword=<password>
+   keyAlias=wearforankidroid
+   keyPassword=<password>
+   ```
+
+3. Back up the keystore and its password somewhere outside this machine. Play App Signing lets you
+   reset a lost upload key, but the backup saves the support round-trip.
+
+4. Build and sign both bundles:
+
+   ```bash
+   ./gradlew :phone:bundleRelease :wear:bundleRelease
+   ```
+
+   Outputs are `phone/build/outputs/bundle/release/phone-release.aab` and
+   `wear/build/outputs/bundle/release/wear-release.aab`.
+
+5. Check that both bundles carry the same certificate, which Play requires for one listing:
+
+   ```bash
+   keytool -printcert -jarfile phone/build/outputs/bundle/release/phone-release.aab | grep SHA256
+   keytool -printcert -jarfile wear/build/outputs/bundle/release/wear-release.aab | grep SHA256
+   ```
+
+6. Upload both bundles to the same Play release, and opt in to Play App Signing on the first upload.
+   The upload key's SHA-256 fingerprint is needed for Android developer verification as well as
+   Play App Signing. Registering the application id and fingerprint does not require a public
+   listing.
+
+There is no GitHub release workflow for the apps yet. One would decode the keystore from repository
+secrets, run the two bundle tasks, verify the certificates match, and attach the bundles plus the R8
+`mapping.txt` files to a GitHub Release.
+
 
 ## Version numbers
 

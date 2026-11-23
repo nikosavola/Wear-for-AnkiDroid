@@ -65,8 +65,8 @@ private fun AboutDialog(onDismiss: () -> Unit) {
       ) {
         Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.labelMedium)
         Text(
-          "Anki® is a registered trademark of Ankitects Pty Ltd. AnkiDroid is a trademark of " +
-            "the AnkiDroid Open Source Team. This app is an unofficial third-party companion " +
+          "Anki and the Anki logo are trademarks of Anki Software, LLC. AnkiDroid is a trademark " +
+            "of the AnkiDroid Open Source Team. This app is an unofficial third-party companion " +
             "and is not affiliated with or endorsed by either."
         )
         Text(

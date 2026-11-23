@@ -216,7 +216,8 @@ AnkiDroid's own API library, so apps of any license can use it.
 See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for build, test and emulator setup, and
 [CODE_OF_CONDUCT.md](.github/CODE_OF_CONDUCT.md) for community expectations. Found a security
 issue? See [SECURITY.md](.github/SECURITY.md) instead of opening a public issue. Release steps,
-including the library publish on tags, are in [docs/RELEASING.md](docs/RELEASING.md).
+including the library publish on tags, are in [docs/RELEASING.md](docs/RELEASING.md); the Play
+submission checklist is in [docs/PLAY_STORE.md](docs/PLAY_STORE.md).
 
 ---
 
